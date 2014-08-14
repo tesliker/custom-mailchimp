@@ -1,0 +1,182 @@
+<?php
+module_load_include('php', 'custom_mailchimp','MailChimp');
+
+//$MailChimp = new MailChimp('50545a0c84f421ba3b6f677b96f07e89-us8');
+//print_r($MailChimp->call('lists/list'));
+
+function custom_mailchimp_menu() {
+  $items['admin/config/services/custom-mailchimp'] = array(
+    'title' => 'Custom Mailchimp Settings',
+    'page callback' => 'drupal_get_form',
+	'page arguments' => array('custom_mailchimp_settings_form'),
+    'access arguments' => array('administer custom mailchimp'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+function custom_mailchimp_permission() {
+  return array(
+    'administer custom mailchimp' => array(
+      'title' => t('Administer Custom Mailchimp'),
+      'description' => t('Perform administration tasks for custom mailchimp module.'),
+    ),
+  );
+}
+
+
+function custom_mailchimp_settings_form($form, &$form_state) {
+  $form['custom_mailchimp_form_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Form Id'),
+    '#default_value' => variable_get('custom_mailchimp_form_id', ''),
+    '#description' => t('Which form has the values you want to submit to mailchimp?'),
+    '#required' => TRUE,
+  );
+  
+    $form['custom_mailchimp_api_key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('API Key'),
+    '#default_value' => variable_get('custom_mailchimp_api_key', ''),
+    '#description' => t('You mailchimp API key'),
+    '#required' => TRUE,
+	);
+  
+    $form['custom_mailchimp_list_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('List ID'),
+    '#default_value' => variable_get('custom_mailchimp_list_id', ''),
+    '#description' => t('You mailchimp List ID'),
+    '#required' => TRUE,
+  );
+  
+  
+  
+  return system_settings_form($form);
+}
+
+function custom_mailchimp_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == variable_get('custom_mailchimp_form_id')) {
+   $form['mailchimp_checkbox'] = array(
+     '#type' => 'checkbox',
+	 '#title' => 'Subscribe to our newsletter!',
+	 '#default_value' => TRUE,
+   );
+   $form['#submit'][] = 'custom_mailchimp_submit_function';
+  }
+}
+
+function custom_mailchimp_submit_function($form, &$form_state) {
+  if ($form_state['values']['mailchimp_checkbox'] == TRUE) {
+    $MailChimp = new MailChimp(variable_get('custom_mailchimp_api_key'));
+    $result = $MailChimp->call('lists/subscribe', array(
+                'id'                => variable_get('custom_mailchimp_list_id'),
+                'email'             => array('email'=>$form_state['input']['submitted']['email']),
+                'merge_vars'        => array('FNAME'=>$form_state['input']['submitted']['first_name'], 'LNAME'=>$form_state['input']['submitted']['last_name']),
+                'double_optin'      => false,
+                'update_existing'   => true,
+                'replace_interests' => false,
+                'send_welcome'      => false,
+            ));
+  }
+}
+
+/**
+ * Implements hook_block_info().
+*
+ */
+function custom_mailchimp_block_info() {
+// Create an array that will hold our blocks
+$blocks = array();
+$blocks['custom_mailchimp_form'] = array(
+'info' => t('Custom Mailchimp Block'),
+'cache' => DRUPAL_CACHE_GLOBAL,
+);
+return $blocks;
+}
+ 
+/**
+ * Implements hook_block_view().
+ *
+ * This function tells drupal how to define our block when viewed.
+ *
+ */
+function custom_mailchimp_block_view($delta = '') {
+// Create an array that will be returned as our block
+$block = array();
+switch($delta) {
+case 'custom_mailchimp_form':
+$block['subject'] = t('Custom Mailchimp Form');
+$block['content'] = drupal_get_form('custom_mailchimp_form');
+break;
+}
+return $block;
+}
+ 
+/**
+ * Define the form to be returned.
+ *
+ */
+function custom_mailchimp_form($form, &$form_state) {
+
+$form['custom_mailchimp_firstName'] = array(
+'#type' => 'textfield',
+'#required' => TRUE,
+'#title' => t("First Name"),
+'#size' => 25,
+//'#description' => t('Must be a valid email address'),
+);
+
+$form['custom_mailchimp_lastName'] = array(
+'#type' => 'textfield',
+'#required' => TRUE,
+'#title' => t("Last Name"),
+'#size' => 25,
+//'#description' => t('Must be a valid email address'),
+);
+ 
+$form['custom_mailchimp_email'] = array(
+'#type' => 'textfield',
+'#required' => TRUE,
+'#title' => t("Email"),
+'#size' => 25,
+//'#description' => t('Must be a valid email address'),
+);
+ 
+$form['submit'] = array(
+'#type' => 'submit',
+'#value' => t('Signup'),
+);
+ 
+return $form;
+}
+ 
+/*
+ * Define a validation function that drupal will
+ * automatically call when the submit button is pressed.
+ *
+ */
+function custom_mailchimp_form_validate($form, &$form_state) {
+$email = $form_state['values']['custom_mailchimp_email'];
+if(valid_email_address($email) == 0) {
+form_set_error('custom_mailchimp_email', t('Not a valid email address'));
+}
+}
+ 
+/*
+ * Define a submit funciton that drupal will
+ * automatically call when submit is pressed (and all validators pass)
+ */
+function custom_mailchimp_form_submit($form, &$form_state) {
+    $MailChimp = new MailChimp(variable_get('custom_mailchimp_api_key'));
+    $result = $MailChimp->call('lists/subscribe', array(
+                'id'                => variable_get('custom_mailchimp_list_id'),
+                'email'             => array('email'=>$form_state['values']['custom_mailchimp_email']),
+                'merge_vars'        => array('FNAME'=>$form_state['values']['custom_mailchimp_firstName'], 'LNAME'=>$form_state['values']['custom_mailchimp_lastName']),
+                'double_optin'      => false,
+                'update_existing'   => true,
+                'replace_interests' => false,
+                'send_welcome'      => false,
+            ));
+
+}
